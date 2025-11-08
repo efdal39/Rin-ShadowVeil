@@ -1,0 +1,915 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Rin: Shadow Veil</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            width: 100%;
+            height: 100vh;
+            overflow: hidden;
+            background: linear-gradient(180deg, #0a0a1a 0%, #1a0a2e 50%, #2a1a3e 100%);
+            font-family: 'Courier New', monospace;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            touch-action: none;
+        }
+
+        #gameContainer {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            max-width: 800px;
+            max-height: 600px;
+            background: #0a0a1a;
+            box-shadow: 0 0 40px rgba(255, 0, 0, 0.3);
+            overflow: hidden;
+        }
+
+        #gameCanvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+            image-rendering: pixelated;
+            image-rendering: crisp-edges;
+        }
+
+        .screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background: rgba(0, 0, 0, 0.9);
+            z-index: 10;
+            animation: fadeIn 0.3s ease-in;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        h1 {
+            font-size: 3em;
+            color: #ff0000;
+            text-shadow: 0 0 20px #ff0000, 0 0 40px #ff0000;
+            margin-bottom: 20px;
+            letter-spacing: 4px;
+            animation: glow 2s ease-in-out infinite;
+        }
+
+        @keyframes glow {
+            0%, 100% { text-shadow: 0 0 20px #ff0000, 0 0 40px #ff0000; }
+            50% { text-shadow: 0 0 30px #ff0000, 0 0 60px #ff0000, 0 0 80px #ff0000; }
+        }
+
+        .subtitle {
+            font-size: 1.2em;
+            color: #ffaa00;
+            margin-bottom: 30px;
+            font-style: italic;
+            text-shadow: 0 0 10px #ffaa00;
+        }
+
+        button {
+            padding: 15px 40px;
+            font-size: 1.2em;
+            font-family: 'Courier New', monospace;
+            background: linear-gradient(135deg, #ff0000 0%, #aa0000 100%);
+            color: white;
+            border: 2px solid #ffaa00;
+            cursor: pointer;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            box-shadow: 0 0 20px rgba(255, 0, 0, 0.5);
+            transition: all 0.3s ease;
+            font-weight: bold;
+        }
+
+        button:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 30px rgba(255, 0, 0, 0.8);
+        }
+
+        button:active {
+            transform: scale(0.95);
+        }
+
+        #score {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            font-size: 1.5em;
+            color: #ffaa00;
+            text-shadow: 0 0 10px #ffaa00, 2px 2px 0 #000;
+            z-index: 5;
+            font-weight: bold;
+        }
+
+        #highScore {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            font-size: 1.5em;
+            color: #ff0000;
+            text-shadow: 0 0 10px #ff0000, 2px 2px 0 #000;
+            z-index: 5;
+            font-weight: bold;
+        }
+
+        #finalScore {
+            font-size: 2em;
+            color: #ffaa00;
+            margin: 20px 0;
+            text-shadow: 0 0 20px #ffaa00;
+        }
+
+        .instruction {
+            color: #aaa;
+            font-size: 0.9em;
+            margin-top: 20px;
+            text-align: center;
+            max-width: 80%;
+        }
+
+        @media (max-width: 600px) {
+            h1 { font-size: 2em; }
+            button { font-size: 1em; padding: 12px 30px; }
+            #score { font-size: 1.2em; }
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <canvas id="gameCanvas"></canvas>
+        <div id="score">Score: 0</div>
+        <div id="highScore">Best: 0</div>
+        
+        <!-- Start Screen -->
+        <div id="startScreen" class="screen">
+            <h1>RIN: SHADOW VEIL</h1>
+            <div class="subtitle">"The shadows whisper..."</div>
+            <button id="startBtn">START GAME</button>
+            <div class="instruction">
+                Desktop: SPACE to jump, E to attack<br>
+                Mobile: TAP to jump, HOLD to attack
+            </div>
+        </div>
+
+        <!-- Game Over Screen -->
+        <div id="gameOverScreen" class="screen hidden">
+            <h1>GAME OVER</h1>
+            <div id="finalScore">Score: 0</div>
+            <button id="retryBtn">TRY AGAIN</button>
+        </div>
+    </div>
+
+    <script>
+        // ========================================
+        // GAME SETUP
+        // ========================================
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const startScreen = document.getElementById('startScreen');
+        const gameOverScreen = document.getElementById('gameOverScreen');
+        const scoreDisplay = document.getElementById('score');
+        const finalScoreDisplay = document.getElementById('finalScore');
+        const startBtn = document.getElementById('startBtn');
+        const retryBtn = document.getElementById('retryBtn');
+        const highScoreDisplay = document.getElementById('highScore');
+
+        // Set canvas size
+        function resizeCanvas() {
+            const container = document.getElementById('gameContainer');
+            canvas.width = 800;
+            canvas.height = 600;
+        }
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+
+        // ========================================
+        // GAME STATE
+        // ========================================
+        let gameState = 'start'; // 'start', 'playing', 'gameOver'
+        let score = 0;
+        let highScore = 0;
+        let gameSpeed = 5;
+        let frameCount = 0;
+        let groundY = 500;
+
+        // ========================================
+        // PLAYER (RIN)
+        // ========================================
+        const player = {
+            x: 150,
+            y: groundY,
+            width: 40,
+            height: 50,
+            velocityY: 0,
+            gravity: 0.6,
+            jumpPower: -13,
+            isJumping: false,
+            isAttacking: false,
+            attackTimer: 0,
+            attackDuration: 15, // frames
+            
+            jump() {
+                if (!this.isJumping) {
+                    this.velocityY = this.jumpPower;
+                    this.isJumping = true;
+                }
+            },
+            
+            attack() {
+                if (!this.isAttacking) {
+                    this.isAttacking = true;
+                    this.attackTimer = this.attackDuration;
+                }
+            },
+            
+            update() {
+                // Apply gravity
+                this.velocityY += this.gravity;
+                this.y += this.velocityY;
+                
+                // Ground collision
+                if (this.y >= groundY) {
+                    this.y = groundY;
+                    this.velocityY = 0;
+                    this.isJumping = false;
+                }
+                
+                // Attack timer
+                if (this.isAttacking) {
+                    this.attackTimer--;
+                    if (this.attackTimer <= 0) {
+                        this.isAttacking = false;
+                    }
+                }
+            },
+            
+            draw() {
+                // Shadow
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+                ctx.ellipse(this.x + 20, groundY + 55, 20, 5, 0, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // Body (black ninja outfit)
+                ctx.fillStyle = '#1a1a1a';
+                ctx.fillRect(this.x + 10, this.y + 15, 20, 30);
+                
+                // Head
+                ctx.fillStyle = '#2a2a2a';
+                ctx.fillRect(this.x + 12, this.y, 16, 18);
+                
+                // Red bandana
+                ctx.fillStyle = '#ff0000';
+                ctx.fillRect(this.x + 8, this.y + 3, 24, 6);
+                
+                // White spiky hair
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(this.x + 10, this.y - 3, 4, 6);
+                ctx.fillRect(this.x + 16, this.y - 5, 4, 8);
+                ctx.fillRect(this.x + 22, this.y - 2, 4, 5);
+                
+                // Glowing yellow eyes
+                ctx.fillStyle = '#ffff00';
+                ctx.fillRect(this.x + 14, this.y + 10, 3, 3);
+                ctx.fillRect(this.x + 21, this.y + 10, 3, 3);
+                
+                // Add glow effect to eyes
+                ctx.shadowBlur = 5;
+                ctx.shadowColor = '#ffff00';
+                ctx.fillRect(this.x + 14, this.y + 10, 3, 3);
+                ctx.fillRect(this.x + 21, this.y + 10, 3, 3);
+                ctx.shadowBlur = 0;
+                
+                // Arms
+                ctx.fillStyle = '#1a1a1a';
+                ctx.fillRect(this.x + 5, this.y + 20, 6, 15);
+                ctx.fillRect(this.x + 29, this.y + 20, 6, 15);
+                
+                // Legs
+                ctx.fillRect(this.x + 12, this.y + 45, 6, 10);
+                ctx.fillRect(this.x + 22, this.y + 45, 6, 10);
+                
+                // Katana on back (gray handle, white blade)
+                if (!this.isAttacking) {
+                    ctx.fillStyle = '#555555';
+                    ctx.fillRect(this.x + 28, this.y + 10, 3, 25);
+                    ctx.fillStyle = '#cccccc';
+                    ctx.fillRect(this.x + 26, this.y + 8, 7, 3);
+                }
+                
+                // Attack animation (sword slash)
+                if (this.isAttacking) {
+                    const slashProgress = 1 - (this.attackTimer / this.attackDuration);
+                    ctx.save();
+                    ctx.translate(this.x + 40, this.y + 25);
+                    ctx.rotate(slashProgress * Math.PI * 0.5);
+                    
+                    // Sword
+                    ctx.fillStyle = '#cccccc';
+                    ctx.fillRect(-2, -30, 4, 35);
+                    ctx.fillStyle = '#555555';
+                    ctx.fillRect(-3, 5, 6, 8);
+                    
+                    // Slash effect
+                    ctx.strokeStyle = `rgba(255, 255, 255, ${1 - slashProgress})`;
+                    ctx.lineWidth = 3;
+                    ctx.beginPath();
+                    ctx.arc(0, -15, 40, -Math.PI * 0.3, Math.PI * 0.3);
+                    ctx.stroke();
+                    
+                    ctx.restore();
+                }
+            }
+        };
+
+        // ========================================
+        // OBSTACLES & ENEMIES
+        // ========================================
+        const obstacles = [];
+        const enemies = [];
+        let spawnTimer = 0;
+        let spawnInterval = 60; // Daha düşük başlangıç değeri (daha sık spawn)
+        let lastObstacleType = null; // Track last obstacle type for variety
+
+        class Obstacle {
+            constructor(type = 'tree') {
+                this.x = canvas.width;
+                this.type = type; // 'tree', 'lantern'
+                
+                if (type === 'tree') {
+                    this.y = groundY - 30;
+                    this.width = 50;
+                    this.height = 80;
+                } else if (type === 'lantern') {
+                    this.y = groundY - 10;
+                    this.width = 35;
+                    this.height = 60;
+                }
+                
+                this.passed = false;
+            }
+            
+            update() {
+                this.x -= gameSpeed;
+            }
+            
+            draw() {
+                if (this.type === 'tree') {
+                    this.drawTree();
+                } else if (this.type === 'lantern') {
+                    this.drawLantern();
+                }
+            }
+            
+            drawTree() {
+                // Purple pine tree trunk
+                ctx.fillStyle = '#4a2a5a';
+                ctx.fillRect(this.x + 20, this.y + 40, 10, 40);
+                
+                // Tree foliage - layered triangular shape (pine style)
+                ctx.fillStyle = '#6a4a8a';
+                
+                // Bottom layer
+                ctx.beginPath();
+                ctx.moveTo(this.x + 25, this.y + 50);
+                ctx.lineTo(this.x + 5, this.y + 70);
+                ctx.lineTo(this.x + 45, this.y + 70);
+                ctx.closePath();
+                ctx.fill();
+                
+                // Middle layer
+                ctx.beginPath();
+                ctx.moveTo(this.x + 25, this.y + 30);
+                ctx.lineTo(this.x + 10, this.y + 55);
+                ctx.lineTo(this.x + 40, this.y + 55);
+                ctx.closePath();
+                ctx.fill();
+                
+                // Top layer
+                ctx.fillStyle = '#7a5a9a';
+                ctx.beginPath();
+                ctx.moveTo(this.x + 25, this.y + 10);
+                ctx.lineTo(this.x + 15, this.y + 35);
+                ctx.lineTo(this.x + 35, this.y + 35);
+                ctx.closePath();
+                ctx.fill();
+                
+                // Add some darker details for depth
+                ctx.fillStyle = '#5a3a7a';
+                ctx.beginPath();
+                ctx.moveTo(this.x + 25, this.y + 30);
+                ctx.lineTo(this.x + 20, this.y + 55);
+                ctx.lineTo(this.x + 25, this.y + 55);
+                ctx.closePath();
+                ctx.fill();
+            }
+            
+            drawLantern() {
+                // Traditional stone lantern (Tōrō)
+                // Base
+                ctx.fillStyle = '#5a5a6a';
+                ctx.fillRect(this.x + 12, this.y + 40, 12, 20);
+                
+                // Lantern body
+                ctx.fillStyle = '#6a6a7a';
+                ctx.fillRect(this.x + 8, this.y + 20, 20, 20);
+                
+                // Top
+                ctx.fillStyle = '#5a5a6a';
+                ctx.beginPath();
+                ctx.moveTo(this.x + 18, this.y + 10);
+                ctx.lineTo(this.x + 5, this.y + 20);
+                ctx.lineTo(this.x + 31, this.y + 20);
+                ctx.closePath();
+                ctx.fill();
+                
+                // Glowing window
+                ctx.fillStyle = '#ffaa00';
+                ctx.fillRect(this.x + 13, this.y + 27, 10, 8);
+                
+                // Glow effect
+                ctx.shadowBlur = 10;
+                ctx.shadowColor = '#ffaa00';
+                ctx.fillRect(this.x + 13, this.y + 27, 10, 8);
+                ctx.shadowBlur = 0;
+            }
+            
+            isOffScreen() {
+                return this.x + this.width < 0;
+            }
+            
+            collidesWith(player) {
+                return player.x < this.x + this.width &&
+                       player.x + player.width > this.x &&
+                       player.y + player.height > this.y &&
+                       player.y < this.y + this.height;
+            }
+        }
+
+        class Enemy {
+            constructor() {
+                this.x = canvas.width;
+                this.y = groundY - 10;
+                this.width = 35;
+                this.height = 50;
+                this.defeated = false;
+                this.passed = false;
+            }
+            
+            update() {
+                if (!this.defeated) {
+                    this.x -= gameSpeed;
+                } else {
+                    // Fade out when defeated
+                    this.y += 2;
+                }
+            }
+            
+            draw() {
+                if (this.defeated) {
+                    ctx.globalAlpha = Math.max(0, 1 - (groundY + 100 - this.y) / 100);
+                }
+                
+                // Shadow enemy
+                ctx.fillStyle = '#4a0a0a';
+                ctx.fillRect(this.x + 8, this.y + 15, 18, 30);
+                
+                // Head
+                ctx.fillStyle = '#3a0a0a';
+                ctx.fillRect(this.x + 10, this.y, 15, 18);
+                
+                // Red eyes
+                ctx.fillStyle = '#ff0000';
+                ctx.fillRect(this.x + 12, this.y + 8, 3, 3);
+                ctx.fillRect(this.x + 19, this.y + 8, 3, 3);
+                
+                // Arms
+                ctx.fillStyle = '#4a0a0a';
+                ctx.fillRect(this.x + 4, this.y + 20, 6, 12);
+                ctx.fillRect(this.x + 24, this.y + 20, 6, 12);
+                
+                // Legs
+                ctx.fillRect(this.x + 10, this.y + 45, 6, 10);
+                ctx.fillRect(this.x + 18, this.y + 45, 6, 10);
+                
+                ctx.globalAlpha = 1;
+            }
+            
+            isOffScreen() {
+                return this.x + this.width < 0 || this.y > canvas.height;
+            }
+            
+            collidesWith(player) {
+                if (this.defeated) return false;
+                return player.x < this.x + this.width &&
+                       player.x + player.width > this.x &&
+                       player.y + player.height > this.y &&
+                       player.y < this.y + this.height;
+            }
+            
+            isInAttackRange(player) {
+                if (this.defeated) return false;
+                const attackRange = 80;
+                const verticalRange = 60;
+                
+                // Check if enemy is in front of or slightly behind player
+                const horizontalDistance = this.x - player.x;
+                const verticalDistance = Math.abs((player.y + player.height / 2) - (this.y + this.height / 2));
+                
+                return horizontalDistance > -40 && 
+                       horizontalDistance < attackRange && 
+                       verticalDistance < verticalRange;
+            }
+        }
+
+        function spawnObstaclesAndEnemies() {
+            spawnTimer++;
+            if (spawnTimer >= spawnInterval) {
+                spawnTimer = 0;
+                
+                // Randomly spawn obstacle or enemy
+                if (Math.random() < 0.6) {
+                    // Choose random obstacle type (tree or lantern)
+                    const types = ['tree', 'lantern'];
+                    let obstacleType;
+                    
+                    do {
+                        obstacleType = types[Math.floor(Math.random() * types.length)];
+                    } while (obstacleType === lastObstacleType && Math.random() < 0.7);
+                    
+                    lastObstacleType = obstacleType;
+                    obstacles.push(new Obstacle(obstacleType));
+                } else {
+                    enemies.push(new Enemy());
+                }
+                
+                // Decrease spawn interval more aggressively (increase difficulty)
+                spawnInterval = Math.max(35, spawnInterval - 0.3);
+                
+                // Occasionally spawn very close obstacles for extreme difficulty
+                if (Math.random() < 0.15 && score > 100) {
+                    spawnTimer = spawnInterval - 15; // Next spawn comes very soon
+                }
+            }
+        }
+
+        // ========================================
+        // BACKGROUND
+        // ========================================
+        let bgOffset = 0;
+
+        function drawBackground() {
+            // Far background - Mount Fuji
+            ctx.fillStyle = '#1a0a2e';
+            
+            // Mount Fuji (iconic snow-capped mountain)
+            const fujiX = 300 + (bgOffset * 0.1) % 100;
+            const fujiY = 200;
+            
+            // Mountain body
+            ctx.fillStyle = '#2a1a4e';
+            ctx.beginPath();
+            ctx.moveTo(fujiX, fujiY + 200);
+            ctx.lineTo(fujiX + 200, fujiY);
+            ctx.lineTo(fujiX + 400, fujiY + 200);
+            ctx.lineTo(fujiX, fujiY + 200);
+            ctx.closePath();
+            ctx.fill();
+            
+            // Snow cap (white top)
+            ctx.fillStyle = '#e0e0f0';
+            ctx.beginPath();
+            ctx.moveTo(fujiX + 200, fujiY);
+            ctx.lineTo(fujiX + 150, fujiY + 60);
+            ctx.lineTo(fujiX + 250, fujiY + 60);
+            ctx.closePath();
+            ctx.fill();
+            
+            // Snow details
+            ctx.fillStyle = '#f0f0ff';
+            ctx.beginPath();
+            ctx.moveTo(fujiX + 200, fujiY + 5);
+            ctx.lineTo(fujiX + 170, fujiY + 50);
+            ctx.lineTo(fujiX + 230, fujiY + 50);
+            ctx.closePath();
+            ctx.fill();
+            
+            // Distant mountains
+            ctx.fillStyle = '#1a0a2e';
+            for (let i = -1; i < 3; i++) {
+                const x = i * 400 + (bgOffset * 0.3) % 400;
+                ctx.beginPath();
+                ctx.moveTo(x, canvas.height);
+                ctx.lineTo(x + 100, 300);
+                ctx.lineTo(x + 200, 400);
+                ctx.lineTo(x + 300, 250);
+                ctx.lineTo(x + 400, canvas.height);
+                ctx.closePath();
+                ctx.fill();
+            }
+            
+            // Mid-layer: Traditional Japanese buildings and pagodas
+            ctx.fillStyle = '#2a1a3e';
+            for (let i = -1; i < 4; i++) {
+                const x = i * 300 + (bgOffset * 0.5) % 300;
+                
+                // Pagoda structure (multi-tiered tower)
+                if (i % 2 === 0) {
+                    // Base
+                    ctx.fillRect(x + 100, 380, 60, 120);
+                    
+                    // Tiered roofs (wider to narrower)
+                    for (let tier = 0; tier < 3; tier++) {
+                        const tierY = 380 + tier * 35;
+                        const tierWidth = 80 - tier * 12;
+                        const tierX = x + 110 - (tierWidth - 60) / 2;
+                        
+                        // Roof
+                        ctx.beginPath();
+                        ctx.moveTo(tierX - 10, tierY);
+                        ctx.lineTo(tierX + tierWidth + 10, tierY);
+                        ctx.lineTo(tierX + tierWidth, tierY + 10);
+                        ctx.lineTo(tierX, tierY + 10);
+                        ctx.closePath();
+                        ctx.fill();
+                    }
+                    
+                    // Spire on top
+                    ctx.fillRect(x + 127, 370, 6, 15);
+                    ctx.beginPath();
+                    ctx.moveTo(x + 130, 360);
+                    ctx.lineTo(x + 125, 370);
+                    ctx.lineTo(x + 135, 370);
+                    ctx.closePath();
+                    ctx.fill();
+                } else {
+                    // Traditional house with curved roof
+                    ctx.fillRect(x + 80, 420, 80, 80);
+                    
+                    // Curved roof
+                    ctx.beginPath();
+                    ctx.moveTo(x + 60, 420);
+                    ctx.quadraticCurveTo(x + 120, 400, x + 180, 420);
+                    ctx.lineTo(x + 170, 430);
+                    ctx.quadraticCurveTo(x + 120, 415, x + 70, 430);
+                    ctx.closePath();
+                    ctx.fill();
+                    
+                    // Windows
+                    ctx.fillStyle = '#ffaa00';
+                    ctx.fillRect(x + 95, 450, 15, 20);
+                    ctx.fillRect(x + 130, 450, 15, 20);
+                    ctx.fillStyle = '#2a1a3e';
+                }
+            }
+            
+            // Front layer: Closer buildings
+            ctx.fillStyle = '#3a2a4e';
+            for (let i = -1; i < 5; i++) {
+                const x = i * 200 + (bgOffset * 0.8) % 200;
+                
+                // Simple building silhouette
+                ctx.fillRect(x + 50, 450, 50, 50);
+                
+                // Traditional roof
+                ctx.beginPath();
+                ctx.moveTo(x + 40, 450);
+                ctx.lineTo(x + 50, 440);
+                ctx.lineTo(x + 100, 440);
+                ctx.lineTo(x + 110, 450);
+                ctx.closePath();
+                ctx.fill();
+            }
+            
+            // Ground
+            ctx.fillStyle = '#2a1a3e';
+            ctx.fillRect(0, groundY + 50, canvas.width, canvas.height - groundY - 50);
+            
+            // Ground detail (stone path)
+            ctx.fillStyle = '#3a2a4e';
+            ctx.fillRect(0, groundY + 50, canvas.width, 10);
+            
+            // Mist effect
+            const gradient = ctx.createLinearGradient(0, groundY, 0, groundY - 200);
+            gradient.addColorStop(0, 'rgba(42, 26, 62, 0.5)');
+            gradient.addColorStop(1, 'rgba(42, 26, 62, 0)');
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, groundY - 200, canvas.width, 200);
+            
+            bgOffset -= gameSpeed * 0.3;
+        }
+
+        // ========================================
+        // COLLISION DETECTION
+        // ========================================
+        function checkCollisions() {
+            // Check enemy attacks FIRST (before obstacles)
+            for (let enemy of enemies) {
+                if (player.isAttacking && enemy.isInAttackRange(player) && !enemy.defeated) {
+                    enemy.defeated = true;
+                    score += 25;
+                }
+            }
+            
+            // Check obstacle collisions
+            for (let obstacle of obstacles) {
+                if (obstacle.collidesWith(player)) {
+                    endGame();
+                    return;
+                }
+                
+                // Score when passing obstacle
+                if (!obstacle.passed && obstacle.x + obstacle.width < player.x) {
+                    obstacle.passed = true;
+                    score += 10;
+                }
+            }
+            
+            // Check enemy collisions (only if not defeated)
+            for (let enemy of enemies) {
+                if (!enemy.defeated && enemy.collidesWith(player)) {
+                    endGame();
+                    return;
+                }
+                
+                // Score when passing enemy
+                if (!enemy.defeated && !enemy.passed && enemy.x + enemy.width < player.x) {
+                    enemy.passed = true;
+                    score += 5;
+                }
+            }
+        }
+
+        // ========================================
+        // GAME LOOP
+        // ========================================
+        function gameLoop() {
+            if (gameState !== 'playing') {
+                requestAnimationFrame(gameLoop);
+                return;
+            }
+            
+            frameCount++;
+            
+            // Clear canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Draw background
+            drawBackground();
+            
+            // Update and draw player
+            player.update();
+            player.draw();
+            
+            // Spawn obstacles and enemies
+            spawnObstaclesAndEnemies();
+            
+            // Update and draw obstacles
+            for (let i = obstacles.length - 1; i >= 0; i--) {
+                obstacles[i].update();
+                obstacles[i].draw();
+                
+                if (obstacles[i].isOffScreen()) {
+                    obstacles.splice(i, 1);
+                }
+            }
+            
+            // Update and draw enemies
+            for (let i = enemies.length - 1; i >= 0; i--) {
+                enemies[i].update();
+                enemies[i].draw();
+                
+                if (enemies[i].isOffScreen()) {
+                    enemies.splice(i, 1);
+                }
+            }
+            
+            // Check collisions
+            checkCollisions();
+            
+            // Increase difficulty over time (more aggressive speed increase)
+            if (frameCount % 200 === 0) {
+                gameSpeed = Math.min(15, gameSpeed + 0.5);
+            }
+            
+            // Update score display
+            score += 0.1;
+            scoreDisplay.textContent = `Score: ${Math.floor(score)}`;
+            
+            // Update high score
+            if (Math.floor(score) > highScore) {
+                highScore = Math.floor(score);
+                highScoreDisplay.textContent = `Best: ${highScore}`;
+            }
+            
+            requestAnimationFrame(gameLoop);
+        }
+
+        // ========================================
+        // GAME CONTROL
+        // ========================================
+        function startGame() {
+            gameState = 'playing';
+            score = 0;
+            gameSpeed = 5;
+            frameCount = 0;
+            spawnTimer = 0;
+            spawnInterval = 60;
+            lastObstacleType = null;
+            obstacles.length = 0;
+            enemies.length = 0;
+            player.y = groundY;
+            player.velocityY = 0;
+            player.isJumping = false;
+            player.isAttacking = false;
+            
+            startScreen.classList.add('hidden');
+            gameOverScreen.classList.add('hidden');
+        }
+
+        function endGame() {
+            gameState = 'gameOver';
+            finalScoreDisplay.textContent = `Score: ${Math.floor(score)}`;
+            gameOverScreen.classList.remove('hidden');
+        }
+
+        // ========================================
+        // INPUT HANDLING
+        // ========================================
+        let touchStartTime = 0;
+        const longPressDuration = 200; // ms
+
+        // Keyboard controls
+        document.addEventListener('keydown', (e) => {
+            if (gameState !== 'playing') return;
+            
+            if (e.code === 'Space' || e.key === ' ') {
+                e.preventDefault();
+                player.jump();
+            } else if (e.code === 'KeyE' || e.key === 'e' || e.key === 'E') {
+                e.preventDefault();
+                player.attack();
+            }
+        });
+
+        // Touch controls
+        canvas.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            if (gameState !== 'playing') return;
+            
+            touchStartTime = Date.now();
+            player.jump();
+        }, { passive: false });
+
+        canvas.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            if (gameState !== 'playing') return;
+            
+            const touchDuration = Date.now() - touchStartTime;
+            if (touchDuration >= longPressDuration) {
+                player.attack();
+            }
+        }, { passive: false });
+
+        // Mouse controls (for desktop)
+        canvas.addEventListener('mousedown', (e) => {
+            if (gameState !== 'playing') return;
+            player.jump();
+        });
+
+        // Button events
+        startBtn.addEventListener('click', startGame);
+        retryBtn.addEventListener('click', startGame);
+
+        // Prevent default touch behavior
+        document.body.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+        }, { passive: false });
+
+        // Start game loop
+        gameLoop();
+    </script>
+</body>
+</html>
